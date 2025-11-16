@@ -1,33 +1,46 @@
 import chainlit as cl
 from src.helper import *
-from src.load_data import *
-from src.prompt import RAG_PROMPT
+from store_index import *
+from src.prompt import RAG_PROMPT, ORDER_SUMMARY_PROMPT, TWILIO_NOTIFICATION_PROMPT 
 from datetime import datetime
+from langchain_groq import ChatGroq
+from langchain.chains import RetrievalQA
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from src.order_manager import order_manager
 from src.payment_handler import payment_handler
+from langchain_huggingface import HuggingFaceEmbeddings
+from pinecone.grpc import PineconeGRPC as Pinecone
+from langchain_pinecone import PineconeVectorStore
 import json
+import os
 
 
+
+# Initialize Pinecone
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+pc = Pinecone(api_key=PINECONE_API_KEY)
 
 @cl.on_chat_start
 async def start():
-    # Initialize all components
-    embeddings = OpenAIEmbeddings()
-    index_name = "nigerian-dishes"
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    index_name = "dashdishorderbot"
     
-    docsearch = Pinecone.from_existing_index(
+    # Connect to existing Pinecone index
+    docsearch = PineconeVectorStore.from_existing_index(
         index_name=index_name,
         embedding=embeddings
     )
-    
-    llm = ChatOpenAI(
-        model_name="gpt-3.5-turbo",
-        temperature=0.7,
+
+    # Initialize LLM
+    llm = ChatGroq(
+        groq_api_key=os.getenv("GROQ_API_KEY"),
+        model_name="llama-3.1-70b-versatile",
+        temperature=0.4,
         streaming=True
     )
     
+    # Create RAG chain
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
@@ -52,6 +65,36 @@ I can help you:
 
 What would you like to do today?""").send()
 
+
+async def handle_menu_query(message: cl.Message):
+    """Handle dish recommendations using RAG"""
+    qa_chain = cl.user_session.get("qa_chain")
+    msg = cl.Message(content="")
+    await msg.send()
+    
+    # Use RAG to get dish recommendations
+    res = await qa_chain.acall(
+        message.content,
+        callbacks=[cl.AsyncLangchainCallbackHandler()]
+    )
+    
+    answer = res["result"]
+    response = f"{answer}\n\nWould you like to order any of these dishes? Just tell me what you'd like!"
+    await cl.Message(content=response).send()
+
+async def handle_general_query(message: cl.Message):
+    """Handle general questions using RAG"""
+    qa_chain = cl.user_session.get("qa_chain")
+    msg = cl.Message(content="")
+    await msg.send()
+    
+    res = await qa_chain.acall(
+        message.content,
+        callbacks=[cl.AsyncLangchainCallbackHandler()]
+    )
+    
+    await cl.Message(content=res["result"]).send()
+
 @cl.on_message
 async def handle_message(message: cl.Message):
     user_input = message.content.lower()
@@ -66,9 +109,9 @@ async def handle_message(message: cl.Message):
     elif any(keyword in user_input for keyword in ['order', 'buy', 'cart']):
         await start_order_process()
     elif any(keyword in user_input for keyword in ['menu', 'dishes', 'what do you have']):
-        await handle_menu_query(message)
+        await handle_menu_query(message)  
     else:
-        await handle_general_query(message)
+        await handle_general_query(message)  
 
 async def start_order_process():
     """Start the order collection process"""

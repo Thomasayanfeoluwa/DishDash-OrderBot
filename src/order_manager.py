@@ -1,7 +1,9 @@
 import chainlit as cl
-from payment_handler import payment_handler
+from src.payment_handler import payment_handler  
 import json
 from datetime import datetime
+from langchain_groq import ChatGroq
+import os
 
 class OrderManager:
     def __init__(self):
@@ -27,8 +29,6 @@ class OrderManager:
     
     def calculate_total(self, order_items):
         """Calculate order total (simplified - you'd have actual prices)"""
-        # This is a simplified calculation
-        # In reality, you'd fetch prices from your database
         base_price = len(order_items) * 1500  # Assuming average dish price
         return base_price
     
@@ -99,7 +99,7 @@ Please click the button below to complete your payment:""",
             order_data["payment_reference"] = reference
             order_data["paid_at"] = datetime.now().isoformat()
             
-            # Send Twilio notification
+            # ✅ CORRECTED - Use the proper method name
             await payment_handler.send_twilio_notification(
                 order_data=order_data,
                 payment_data=verification["data"]

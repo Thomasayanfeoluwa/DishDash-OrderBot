@@ -1,7 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 
 # Main RAG prompt for dish recommendations
-RAG_PROMPT = PromptTemplate(
+RAG_PROMPT = ChatPromptTemplate(
     template="""You are DishDash OrderBot, a helpful assistant for Nigerian food delivery.
 
 Use the following context about Nigerian dishes to answer the question. If you don't know the answer based on the context, say so.
@@ -21,7 +21,7 @@ Answer:""",
 )
 
 # Order summary prompt
-ORDER_SUMMARY_PROMPT = PromptTemplate(
+ORDER_SUMMARY_PROMPT = ChatPromptTemplate(
     template="""Create a clear order summary for the following order:
 
 Customer: {customer_name}
@@ -43,7 +43,7 @@ Make it professional and easy to read.""",
 )
 
 # Twilio notification prompt
-TWILIO_NOTIFICATION_PROMPT = PromptTemplate(
+TWILIO_NOTIFICATION_PROMPT = ChatPromptTemplate(
     template="""🚨 NEW ORDER ALERT 🚨
 
 Customer: {customer_name}

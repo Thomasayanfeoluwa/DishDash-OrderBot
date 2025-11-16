@@ -1,19 +1,22 @@
 import requests
 import json
-from imports import paystack
-from prompt import ORDER_SUMMARY_PROMPT, TWILIO_NOTIFICATION_PROMPT
+import os
 import chainlit as cl
+from langchain_groq import ChatGroq
+from src.prompt import ORDER_SUMMARY_PROMPT, TWILIO_NOTIFICATION_PROMPT 
+from twilio.rest import Client
 
 class PaymentHandler:
     def __init__(self):
         self.paystack_secret_key = os.getenv('PAYSTACK_SECRET_KEY')
         self.paystack_public_key = os.getenv('PAYSTACK_PUBLIC_KEY')
         self.base_url = "https://api.paystack.co"
+        self.twilio_client = Client(os.getenv('TWILIO_ACCOUNT_SID'), os.getenv('TWILIO_AUTH_TOKEN'))
     
     async def initialize_payment(self, email, amount, order_data, metadata=None):
         """Initialize Paystack payment"""
         try:
-            # Convert amount to kobo (Paystack requires amount in kobo)
+            # Convert amount to kobo 
             amount_kobo = int(amount * 100)
             
             # Prepare payment data
@@ -22,7 +25,7 @@ class PaymentHandler:
                 "amount": amount_kobo,
                 "currency": "NGN",
                 "metadata": metadata or {},
-                "callback_url": "https://your-domain.com/verify-payment"  # Update with your domain
+                "callback_url": "https://your-domain.com/verify-payment"  
             }
             
             # Add order data to metadata
@@ -88,10 +91,16 @@ class PaymentHandler:
     
     async def create_order_summary(self, order_data):
         """Create order summary using LLM"""
-        llm = ChatOpenAI(temperature=0.3)
+        # Proper LLM initialization
+        llm = ChatGroq(
+            groq_api_key=os.getenv("GROQ_API_KEY"),
+            model_name="llama-3.1-70b-versatile",
+            temperature=0.3
+        )
         
-        summary = await llm.apredict(
-            text=ORDER_SUMMARY_PROMPT.format(
+        # Use proper async method
+        summary = await llm.ainvoke(
+            ORDER_SUMMARY_PROMPT.format(
                 customer_name=order_data.get('customer_name', 'Customer'),
                 phone_number=order_data.get('phone_number', 'N/A'),
                 location=order_data.get('location', 'N/A'),
@@ -100,16 +109,20 @@ class PaymentHandler:
             )
         )
         
-        return summary
+        return summary.content
     
     async def send_twilio_notification(self, order_data, payment_data):
         """Send WhatsApp notification to owner"""
         try:
             # Create notification message using LLM
-            llm = ChatOpenAI(temperature=0.3)
+            llm = ChatGroq(
+                groq_api_key=os.getenv("GROQ_API_KEY"),
+                model_name="llama-3.1-70b-versatile",
+                temperature=0.3
+            )
             
-            notification_msg = await llm.apredict(
-                text=TWILIO_NOTIFICATION_PROMPT.format(
+            notification_msg = await llm.ainvoke(
+                TWILIO_NOTIFICATION_PROMPT.format(
                     customer_name=order_data.get('customer_name', 'Customer'),
                     phone_number=order_data.get('phone_number', 'N/A'),
                     location=order_data.get('location', 'N/A'),
@@ -121,8 +134,8 @@ class PaymentHandler:
             )
             
             # Send WhatsApp message
-            message = twilio_client.messages.create(
-                body=notification_msg,
+            message = self.twilio_client.messages.create(
+                body=notification_msg.content,
                 from_=os.getenv('TWILIO_WHATSAPP_FROM'),
                 to=os.getenv('OWNER_PHONE_NUMBER')
             )
