@@ -1,6 +1,133 @@
 import chainlit as cl
-from src.helper import ask_order, messages
+from src.helper import *
+from src.load_data import *
+from src.prompt import RAG_PROMPT
+from datetime import datetime
+from langchain_classic.chains import create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from order_manager import order_manager
+from payment_handler import payment_handler
+import json
 
 
-@cl.on_messages
-async def main
+
+@cl.on_chat_start
+async def start():
+    # Initialize all components
+    embeddings = OpenAIEmbeddings()
+    index_name = "nigerian-dishes"
+    
+    docsearch = Pinecone.from_existing_index(
+        index_name=index_name,
+        embedding=embeddings
+    )
+    
+    llm = ChatOpenAI(
+        model_name="gpt-3.5-turbo",
+        temperature=0.7,
+        streaming=True
+    )
+    
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=docsearch.as_retriever(search_kwargs={"k": 3}),
+        chain_type_kwargs={"prompt": RAG_PROMPT},
+        return_source_documents=True
+    )
+    
+    # Initialize session
+    cl.user_session.set("qa_chain", qa_chain)
+    cl.user_session.set("order_cart", [])
+    cl.user_session.set("customer_info", {})
+    cl.user_session.set("order_stage", "welcome")
+    
+    await cl.Message(content="""🍽️ **Welcome to DishDash OrderBot!** 🍽️
+
+I can help you:
+• Discover delicious Nigerian dishes
+• Place orders seamlessly  
+• Process secure payments
+• Get food delivered to you
+
+What would you like to do today?""").send()
+
+@cl.on_message
+async def handle_message(message: cl.Message):
+    user_input = message.content.lower()
+    current_stage = cl.user_session.get("order_stage", "welcome")
+    
+    if current_stage == "collecting_phone":
+        await handle_phone_input(message)
+    elif current_stage == "collecting_location":
+        await handle_location_input(message)
+    elif current_stage == "collecting_instructions":
+        await handle_instructions_input(message)
+    elif any(keyword in user_input for keyword in ['order', 'buy', 'cart']):
+        await start_order_process()
+    elif any(keyword in user_input for keyword in ['menu', 'dishes', 'what do you have']):
+        await handle_menu_query(message)
+    else:
+        await handle_general_query(message)
+
+async def start_order_process():
+    """Start the order collection process"""
+    cl.user_session.set("order_stage", "collecting_phone")
+    await cl.Message(content="📞 **Let's start your order!**\n\nPlease provide your phone number:").send()
+
+async def handle_phone_input(message: cl.Message):
+    """Handle phone number input"""
+    phone = message.content.strip()
+    cl.user_session.set("customer_info", {"phone": phone})
+    cl.user_session.set("order_stage", "collecting_location")
+    
+    await cl.Message(content="📍 **Great! Now please provide your delivery location:**").send()
+
+async def handle_location_input(message: cl.Message):
+    """Handle location input"""
+    location = message.content.strip()
+    customer_info = cl.user_session.get("customer_info", {})
+    customer_info["location"] = location
+    cl.user_session.set("customer_info", customer_info)
+    cl.user_session.set("order_stage", "collecting_instructions")
+    
+    await cl.Message(content="📝 **Any special instructions for your order?** (e.g., extra spicy, no onions, etc.)\n\nIf none, just type 'none'").send()
+
+async def handle_instructions_input(message: cl.Message):
+    """Handle special instructions"""
+    instructions = "None" if message.content.lower() == "none" else message.content.strip()
+    customer_info = cl.user_session.get("customer_info", {})
+    customer_info["instructions"] = instructions
+    cl.user_session.set("customer_info", customer_info)
+    cl.user_session.set("order_stage", "ready")
+    
+    await cl.Message(content="""✅ **Perfect! You're all set!**
+
+Now you can:
+• Ask me about dishes using the RAG system
+• Tell me what you'd like to order
+• Type 'checkout' when you're ready to pay
+
+What would you like to do?""").send()
+
+@cl.action_callback("pay_now")
+async def on_pay_now(action: cl.Action):
+    """Handle pay now action"""
+    reference = action.value
+    # In a real app, you'd open the payment URL
+    await cl.Message(content=f"Please visit the payment URL to complete your transaction. Reference: {reference}").send()
+
+@cl.action_callback("verify_payment")
+async def on_verify_payment(action: cl.Action):
+    """Handle payment verification"""
+    reference = action.value
+    success = await order_manager.verify_and_complete_order(reference, cl.user_session)
+    
+    if success:
+        cl.user_session.set("order_stage", "welcome")
+    else:
+        await cl.Message(content="Payment verification failed. Please try again or contact support.").send()
+
+# Run the application
+if __name__ == "__main__":
+    cl.run()

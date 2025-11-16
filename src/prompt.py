@@ -1,4 +1,4 @@
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 # Main RAG prompt for dish recommendations
 RAG_PROMPT = PromptTemplate(

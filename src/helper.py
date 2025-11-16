@@ -1,19 +1,9 @@
 import chainlit as cl
 from flask import Flask, render_template, jsonify, request
-from langchain_pinecone import PineconeVectorStore
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from googleapiclient.discovery import build
-from langchain_classic.chains import create_retrieval_chain
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.memory import ConversationBufferWindowMemory
-from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from pinecone.grpc import PineconeGRPC as Pinecone
-from pinecone import ServerlessSpec
-from langchain_pinecone import PineconeVectorStore
 from paystackapi.paystack import Paystack 
 import os
 from paystackapi.transaction import Transaction
