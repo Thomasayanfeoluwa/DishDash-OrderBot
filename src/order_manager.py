@@ -1,4 +1,3 @@
-# order_manager.py
 import chainlit as cl
 from payment_handler import payment_handler
 import json
