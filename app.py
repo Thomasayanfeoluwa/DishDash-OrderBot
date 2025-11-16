@@ -5,8 +5,8 @@ from src.prompt import RAG_PROMPT
 from datetime import datetime
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from order_manager import order_manager
-from payment_handler import payment_handler
+from src.order_manager import order_manager
+from src.payment_handler import payment_handler
 import json
 
 
