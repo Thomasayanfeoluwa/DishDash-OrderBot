@@ -17,6 +17,6 @@ markdown
 loguru==0.7.0
 paystackapi
 huggingface_hub[hf_xet]
-rapidfuzz==3.7.0
+rapidfuzz
 datasets
 -e .
